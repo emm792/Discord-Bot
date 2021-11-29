@@ -1,3 +1,8 @@
+const Discord = require('discord.js');
+// Using scraping from https://geekflare.com/web-scraping-in-javascript/
+const cheerio = require('cheerio');
+const fetch = require("node-fetch");
+
 module.exports = {
   name: 'mtg',
   description: "this is the Magic the Gathering card quick card preview command.",
@@ -8,10 +13,6 @@ module.exports = {
 
     // Now lets get card info from url below
     const url = 'https://magiccards.info/query?q=!'+`${card}`;
-
-    // Using scraping from https://geekflare.com/web-scraping-in-javascript/
-    const cheerio = require('cheerio');
-    const fetch = require("node-fetch");
 
     // function to get the raw data
     const getRawData = (URL) => {
@@ -36,7 +37,6 @@ module.exports = {
        // extracting image
        const imgTable = $("div.card-image-front")[0].children[1];
        const img = $(imgTable).attr('src');
-       message.channel.send(img);
 
        // extracting cost
        // we arent grabbing cheapest, theres multiple in "random" order
@@ -50,6 +50,7 @@ module.exports = {
 
          // cheapest card version for minimum comparison
          var cheapestCost = null;
+         var cheapestUrl = '';
 
          var current = tables[i];
          // get table data
@@ -60,9 +61,12 @@ module.exports = {
            var row = table[j];
            // card name type
            var type = $($(row).children("td").children("a")[0]).text();
-           // card cost
-           var costsData = $($(row).children("td").children("a")[1]).attr('title');
-
+           // get the inspected element
+           var htmlData = $($(row).children("td").children("a")[1]);
+           // get TCG url for pricing
+           var tcgUrl = htmlData.attr('href');
+           // get card cost
+           var costsData = htmlData.text();
            // make sure we have data to publish
            if (type != null && costsData != null) {
              // If so, lets skip the non desireables
@@ -73,9 +77,9 @@ module.exports = {
                // and otherwise we will show results of our search
                // but first we need some extra steps
                // We need to grab the cheaper cost in costsData, as theres usually non-foil, foil, etc
-               // Put all tokens into list
-               var costsArray = costsData.split(" ");
-               // Get rid of words
+               // Put all tokens into list seperated by whitespace
+               var costsArray = costsData.split(/\s/);
+               // Get rid of words or symbols, only keep prices
                var costs = costsArray.filter(token => token.includes('$'));
                var costsNo$ = costs.map(x => x.replace(/[$\s ,`']/g , ""));
                var costsFloat = costsNo$.map(Number);
@@ -83,6 +87,7 @@ module.exports = {
                // Now we compare to global cost
                if (cost < cheapestCost || cheapestCost == null) {
                  cheapestCost = cost;
+                 cheapestUrl = tcgUrl;
                }
              }
            }
@@ -91,9 +96,21 @@ module.exports = {
 
        // Last result, our cheapest card cost found
        if (cheapestCost != null) {
-         message.channel.send("TCGplayer NM market price of " + `${name}` + " averages to $" + `${cheapestCost}`);
+
+         const embed = new Discord.MessageEmbed()
+         .setTitle(name)
+         .setDescription("TCGplayer NM market price of " + `${name}` + " averages to $" + `${cheapestCost}`)
+         .setImage(img)
+         .setURL(cheapestUrl)
+         message.channel.send(embed)
+
        } else {
          message.channel.send("TCGplayer NM market price of " + `${name}` + " is not found.");
+         const embed = new Discord.MessageEmbed()
+         .setTitle(name)
+         .setDescription("TCGplayer NM market price of " + `${name}` + " is not found.")
+         .setImage(img)
+         message.channel.send(embed)
        }
 
     };
